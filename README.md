@@ -8,7 +8,7 @@ Robbyant Team
 
 <div align="center">
 
-[![PDF](https://img.shields.io/static/v1?label=Paper&message=PDF&color=red&logo=adobeacrobatreader)](https://github.com/Robbyant/lingbot-vision/blob/main/tech-report.pdf)
+[![PDF](https://img.shields.io/static/v1?label=Paper&message=PDF&color=red&logo=adobeacrobatreader)](https://github.com/Robbyant/lingbot-vision/blob/main/paper.pdf)
 ![arXiv](https://img.shields.io/static/v1?label=Paper&message=arXiv%20coming%20soon&color=lightgrey&logo=arxiv)
 [![Project](https://img.shields.io/badge/Project-Website-blue)](https://technology.robbyant.com/lingbot-vision)
 [![HuggingFace](https://img.shields.io/static/v1?label=%F0%9F%A4%97%20Model&message=HuggingFace&color=orange)](https://huggingface.co/collections/robbyant/lingbot-vision)
