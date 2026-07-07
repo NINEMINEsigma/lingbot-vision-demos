@@ -170,7 +170,7 @@ If checkpoint keys are prefixed with `backbone.`, the loader strips the prefix a
 @article{lingbot-vision2026,
   title={Vision Pretraining for Dense Spatial Perception},
   author={Fu, Zelin and Tan, Bin and Sun, Changjiang and Liu, Shaohui and Zheng, Kecheng and Xu, Yinghao and Zhu, Xing and Shen, Yujun and Xue, Nan},
-  journal={arXiv preprint arXiv:},
+  journal={arXiv preprint arXiv:2607.05247},
   year={2026}
 }
 ```
