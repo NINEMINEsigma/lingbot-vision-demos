@@ -2,8 +2,6 @@
 
 <h1>LingBot-Vision: Vision Pretraining for Dense Spatial Perception</h1>
 
-Robbyant Team
-
 </div>
 
 <div align="center">
