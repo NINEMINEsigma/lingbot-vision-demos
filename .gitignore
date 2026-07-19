@@ -13,3 +13,6 @@ outputs/
 *.safetensors
 
 tex/
+myvenv/
+venv/
+models/
