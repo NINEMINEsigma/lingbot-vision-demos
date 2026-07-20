@@ -1,9 +1,14 @@
 """LingBot-Vision 视频涂抹跟踪 demo.
 
-第一帧鼠标涂抹目标对象 → 逐帧 cosine token 匹配 → 输出带 mask 叠加的 mp4。
+涂抹目标对象（默认取视频首帧，也可通过 --scribble-image 传入任意图片）
+→ 逐帧 cosine token 匹配 → 输出带 mask 叠加的 mp4。
 
 用法:
-    python demo_video_scribble.py --video 你的视频.mp4 --output demo_output.mp4
+    # 用视频首帧涂抹
+    python video_scribble.py --video 你的视频.mp4 --output demo_output.mp4
+
+    # 用外部图片涂抹（图片会按 size×size 对齐到 patch 网格，与视频帧无关）
+    python video_scribble.py --video 你的视频.mp4 --scribble-image target.jpg --output demo_output.mp4
 """
 
 import argparse
@@ -20,6 +25,11 @@ from lingbot_vision.preprocess import IMAGENET_MEAN, IMAGENET_STD
 def parse_args():
     ap = argparse.ArgumentParser(description="LingBot-Vision 视频涂抹跟踪 demo")
     ap.add_argument("--video", required=True, help="输入视频路径")
+    ap.add_argument(
+        "--scribble-image",
+        default=None,
+        help="用于涂抹的图片路径；不传则取视频首帧涂抹",
+    )
     ap.add_argument("--model", default="models/", help="模型路径（默认 models/）")
     ap.add_argument("--variant", default="small", help="模型变体（默认 small）")
     ap.add_argument("--output", default="outputs/output.mp4", help="输出 mp4 路径")
@@ -57,33 +67,28 @@ def frame_to_norm(frame_bgr, size, patch_size, device):
 # ---------------------------------------------------------------------------
 
 def select_scribble(frame_bgr, size, brush):
-    """弹窗显示第一帧（按原视频比例），鼠标涂抹目标，Enter 确认。
+    """弹窗按原图原分辨率显示涂抹源，鼠标涂抹目标，Enter 确认。
 
-    显示画布按原视频宽高比缩放（长边 = size），mask 内部保持 size×size 正方形
+    显示画布 = 原图本身（所见即所得），mask 内部保持 size×size 正方形
     以对齐 backbone 的 patch 网格。鼠标坐标自动映射到 mask 空间。
     返回 [size, size] uint8 涂抹 mask（255=涂抹, 0=背景）。
     """
     H0, W0 = frame_bgr.shape[:2]
-    # 显示画布：长边 = size，短边按原视频比例
-    if W0 >= H0:
-        disp_w, disp_h = size, max(1, int(size * H0 / W0))
-    else:
-        disp_h, disp_w = size, max(1, int(size * W0 / H0))
-    base = cv2.resize(frame_bgr, (disp_w, disp_h), interpolation=cv2.INTER_LINEAR)
+    base = frame_bgr.copy()
     mask = np.zeros((size, size), dtype=np.uint8)
     drawing = [False]
     last_pt = [None]
 
-    # 显示坐标 → mask 坐标（mask 是 size×size 正方形）
-    sx = size / disp_w
-    sy = size / disp_h
+    # 原图坐标 → mask 坐标（mask 是 size×size 正方形）
+    sx = size / W0
+    sy = size / H0
 
     def to_mask(pt):
         return (int(pt[0] * sx), int(pt[1] * sy))
 
     def render():
-        # mask 半透明叠加到显示画布，保证看到的红色 = 实际选中的 patch 区域
-        mask_disp = cv2.resize(mask, (disp_w, disp_h), interpolation=cv2.INTER_NEAREST)
+        # mask 半透明叠加到原图，保证看到的红色 = 实际选中的 patch 区域
+        mask_disp = cv2.resize(mask, (W0, H0), interpolation=cv2.INTER_NEAREST)
         overlay = base.copy()
         red = np.array([0, 0, 255], dtype=np.uint8)
         blend = (overlay.astype(np.float32) * 0.5 + red.astype(np.float32) * 0.5).astype(np.uint8)
@@ -220,23 +225,31 @@ def main():
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # 读第一帧
-    ok, first_frame = cap.read()
-    if not ok:
-        raise SystemExit("无法读取第一帧")
+    # 涂抹源：优先用 --scribble-image，否则取视频首帧
+    if args.scribble_image:
+        scribble_src = cv2.imread(args.scribble_image)
+        if scribble_src is None:
+            raise SystemExit(f"无法读取涂抹图片: {args.scribble_image}")
+        print(f"[demo] 使用外部图片涂抹: {args.scribble_image}")
+    else:
+        ok, scribble_src = cap.read()
+        if not ok:
+            raise SystemExit("无法读取第一帧")
+        print("[demo] 使用视频首帧涂抹")
 
     # 涂抹交互
-    scribble_mask = select_scribble(first_frame, size, args.brush)
+    scribble_mask = select_scribble(scribble_src, size, args.brush)
 
     # 构建 query tokens
     query_tokens = build_query_tokens(
-        backbone, first_frame, scribble_mask, size, patch_size, device, dtype
+        backbone, scribble_src, scribble_mask, size, patch_size, device, dtype
     )
 
-    # 准备输出
+    # 准备输出（按视频实际帧尺寸，与涂抹源尺寸无关）
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    H, W = first_frame.shape[:2]
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(out_path), fourcc, fps, (W, H))
     if not writer.isOpened():
